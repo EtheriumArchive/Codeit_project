@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  # 데이터베이스 서비스 (MySQL)
+  db:
+    image: mysql:8.0
+    container_name: mysql_container
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: final_analytics@ # 연이 님이 사용할 비밀번호로 바꾸세요!
+      MYSQL_DATABASE: final_analytics        # 사용할 데이터베이스 이름
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./mysql_data:/var/lib/mysql       # DB 데이터를 로컬에 보관 (중요!)
+      - ./dumps:/docker-entrypoint-initdb.d # 여기에 sql 파일을 넣으면 자동 실행됨
+    command:
+      - --max_allowed_packet=256M         # 대용량 파일 처리를 위한 설정 추가
+
+  # 파이썬 분석 서비스
+  analysis:
+    image: python:3.9
+    container_name: python_container
+    volumes:
+      - .:/app                            # 현재 폴더를 컨테이너 내부 /app과 연결
+    working_dir: /app
+    depends_on:
+      - db                                # db 서비스가 시작된 후 실행
+    stdin_open: true
+    tty: true
+    command: bash
