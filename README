@@ -1,0 +1,7 @@
+1. 프로젝트 폴더 > dumps 생성
+2. dumps 폴더 내에 raw data 이동
+3. 기존 docker container 삭제
+4. docker-compose up -d 실행해서 새로운 컨테이너(2개) 생성!
+
+참고용 git/docker 설정 과정
+https://www.notion.so/2f5022bf3d0d804e8c4ac8dc14609f9f
