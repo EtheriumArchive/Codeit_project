@@ -4,8 +4,11 @@
 *.zip
 dumps/
 
+# queries 폴더 안에 있는 sql 파일은 업로드 가능
+!queries/*.sql
+
 # 2. Docker 관련 데이터
-# DB 데이터는 볼륨을 통해 로컬에 저장되므로 Git에 올리지 않습니다.
+# DB 데이터는 볼륨을 통해 로컬에 저장되므로 Git에 올리지 않음
 mysql_data/
 
 # 3. Python 관련 (가상환경, 캐시 등)
