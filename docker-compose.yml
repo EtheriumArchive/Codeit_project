@@ -7,7 +7,7 @@ services:
     container_name: mysql_container
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: final_analytics@ # 연이 님이 사용할 비밀번호로 바꾸세요!
+      MYSQL_ROOT_PASSWORD: final_analytics@
       MYSQL_DATABASE: final_analytics        # 사용할 데이터베이스 이름
     ports:
       - "3313:3306"
