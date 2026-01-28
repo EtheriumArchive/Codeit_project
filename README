@@ -1,7 +1,7 @@
 - git clone으로 진행할 경우!
 1. 프로젝트 폴더 > dumps 폴더 생성
 2. dumps 폴더 내에 raw data 이동
-3. 기존 docker container 삭제
+3. 기존 폴더에서 생성됐던 docker container가 있다면 삭제하고! 없다면 바로 4. 진행!
 4. docker-compose up -d 실행해서 새로운 컨테이너(2개) 생성!
 
 - docker container 생성 과정에서 포트 충돌날 경우!
