@@ -4,5 +4,11 @@
 3. 기존 docker container 삭제
 4. docker-compose up -d 실행해서 새로운 컨테이너(2개) 생성!
 
+- docker container 생성 과정에서 포트 충돌날 경우!
+1. docker-composer.yml 파일
+2. MySQL db > ports > 3307:3306 으로 수정
+
+- 음.... 뭔가를 .. 쓰려고 .. 했는데 ... 잊어버렸어요
+
 참고용 git/docker 설정 과정
 https://www.notion.so/2f5022bf3d0d804e8c4ac8dc14609f9f
