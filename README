@@ -1,3 +1,4 @@
+- git clone으로 진행할 경우!
 1. 프로젝트 폴더 > dumps 생성
 2. dumps 폴더 내에 raw data 이동
 3. 기존 docker container 삭제
