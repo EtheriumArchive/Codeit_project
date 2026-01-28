@@ -1,5 +1,5 @@
 - git clone으로 진행할 경우!
-1. 프로젝트 폴더 > dumps 생성
+1. 프로젝트 폴더 > dumps 폴더 생성
 2. dumps 폴더 내에 raw data 이동
 3. 기존 docker container 삭제
 4. docker-compose up -d 실행해서 새로운 컨테이너(2개) 생성!
@@ -8,7 +8,16 @@
 1. docker-composer.yml 파일
 2. MySQL db > ports > 3307:3306 으로 수정
 
-- 음.... 뭔가를 .. 쓰려고 .. 했는데 ... 잊어버렸어요
+- docker에 설정된 database와 schema 이름 통일해야함!!
+docker-compose.yml > MySQL > enviroment > MYSQL_DATABASE 이름을! Schema 이름이랑 맞춰야! 됩니다!!!
+현재 설정값 : final_analytics
+비밀번호: final_analytics@
+
+- query 업로드용 폴더 생성
+1. 프로젝트 폴더 > queries 폴더 생성
+2. git 업로드용 쿼리 파일(.sql)은 queries 폴더에 저장! 해야! 업로드! 가능함!!!
+> raw data uploade 방지를 위해 .gitignore 설정에 확장자명 .sql을 제외해놨기 때문!!!
+> queries 폴더만 예외 항목으로 지정해놨기 때문!!!!!!!
 
 참고용 git/docker 설정 과정
 https://www.notion.so/2f5022bf3d0d804e8c4ac8dc14609f9f
