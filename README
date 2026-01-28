@@ -8,10 +8,16 @@
 1. docker-composer.yml 파일
 2. MySQL db > ports > 3307:3306 으로 수정
 
-- docker에 설정된 database와 schema 이름 통일해야함!!
-docker-compose.yml > MySQL > enviroment > MYSQL_DATABASE 이름을! Schema 이름이랑 맞춰야! 됩니다!!!
-현재 설정값 : final_analytics
-비밀번호: final_analytics@
+- MySQL Docker 연결 방법
+1. connect to server 실행
+2. 세부내용 설정
+  server type : MySQL
+  Host : localhost
+  Port : 3313
+  Username : root
+  Password: final_analytics@
+  Database : final_analytics
+3. connect
 
 - query 업로드용 폴더 생성
 1. 프로젝트 폴더 > queries 폴더 생성
