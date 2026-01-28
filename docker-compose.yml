@@ -10,7 +10,7 @@ services:
       MYSQL_ROOT_PASSWORD: final_analytics@ # 연이 님이 사용할 비밀번호로 바꾸세요!
       MYSQL_DATABASE: final_analytics        # 사용할 데이터베이스 이름
     ports:
-      - "3306:3306" # 포트충돌 나면 3307:3306 로 바꾸면 됨!
+      - "3313:3306"
     volumes:
       - ./mysql_data:/var/lib/mysql       # DB 데이터를 로컬에 보관 (중요!)
       - ./dumps:/docker-entrypoint-initdb.d # 여기에 sql 파일을 넣으면 자동 실행됨
