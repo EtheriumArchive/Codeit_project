@@ -1,0 +1,29 @@
+- git clone으로 진행할 경우!
+1. 프로젝트 폴더 > dumps 폴더 생성
+2. dumps 폴더 내에 raw data 이동
+3. 기존 폴더에서 생성됐던 docker container가 있다면 삭제하고! 없다면 바로 4. 진행!
+4. docker-compose up -d 실행해서 새로운 컨테이너(2개) 생성!
+
+- docker container 생성 과정에서 포트 충돌날 경우!
+1. docker-composer.yml 파일
+2. MySQL db > ports > 33nn:3306 으로 수정
+
+- MySQL Docker 연결 방법
+1. connect to server 실행
+2. 세부내용 설정
+  server type : MySQL
+  Host : localhost
+  Port : 3313
+  Username : root
+  Password: final_analytics@
+  Database : final_analytics
+3. connect
+
+- query 업로드용 폴더 생성
+1. 프로젝트 폴더 > queries 폴더 생성
+2. git 업로드용 쿼리 파일(.sql)은 queries 폴더에 저장! 해야! 업로드! 가능함!!!
+> raw data uploade 방지를 위해 .gitignore 설정에 확장자명 .sql을 제외해놨기 때문!!!
+> queries 폴더만 예외 항목으로 지정해놨기 때문!!!!!!!
+
+참고용 git/docker 설정 과정
+https://www.notion.so/2f5022bf3d0d804e8c4ac8dc14609f9f
