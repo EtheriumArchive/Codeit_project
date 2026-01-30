@@ -183,7 +183,7 @@ WITH merge_all AS (
     LEFT JOIN accounts_school AS s ON g.school_id = s.id
 ), change_name AS (
     SELECT 
-        CASE
+        CASE 
             WHEN address LIKE '%서울%' THEN '서울'
             WHEN address LIKE '%경기%' THEN '경기도'
             WHEN address LIKE '%인천%' THEN '인천'
