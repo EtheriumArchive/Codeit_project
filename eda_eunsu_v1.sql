@@ -2,7 +2,7 @@
 
 ----------------- accounts_timelinereport -----------------
 -- 신고기록 테이블
-SELECT * FROM accounts_timelinereport;
+SELECT * FROM accounts_timelinereport; 
 
 -- null 확인 (없음)
 SELECT * 
