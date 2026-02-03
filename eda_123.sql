@@ -10,98 +10,7 @@ DESC accounts_paymenthistory;
 
 # 출석테이블
 
-SELECT COUNT(*) FROM accounts_attendance;
-
-SELECT
-  COUNT(DISTINCT user_id) AS active_users
-FROM accounts_attendance;
-
-
-
-
-
--- 유저아이디별로 가장길었던 연속 출석 일수, 현재이어지는 연속 출석 일수 -> 어우 너무 많음;
-SELECT 
-    user_id,
-    MAX(streak_days) AS max_streak_days,
-    MAX(CASE 
-        WHEN DATEDIFF(NOW(), streak_end_date) <= 1 THEN streak_days 
-        ELSE 0 
-    END) AS current_streak_days
-FROM (
-    SELECT 
-        user_id,
-        streak_group_id,
-        COUNT(*) AS streak_days,
-        MAX(attendance_date) AS streak_end_date
-    FROM (
-        SELECT 
-            user_id,
-            attendance_date,
-            DATE_SUB(attendance_date, INTERVAL ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY attendance_date) DAY) AS streak_group_id
-        FROM (
-            SELECT 
-                user_id,
-                jt.attendance_date
-            FROM accounts_attendance
-            JOIN JSON_TABLE(
-                attendance_date_list, 
-                "$[*]" COLUMNS(attendance_date DATE PATH "$")
-            ) AS jt
-        ) AS exploded_data
-    ) AS streak_calculation
-    GROUP BY user_id, streak_group_id
-) AS streak_summary
-GROUP BY user_id
-ORDER BY max_streak_days DESC;
-
-DROP TEMPORARY TABLE IF EXISTS temp_dates;
-
-CREATE TEMPORARY TABLE temp_dates AS
-SELECT 
-    user_id,
-    jt.attendance_date
-FROM accounts_attendance
-JOIN JSON_TABLE(
-    attendance_date_list, 
-    "$[*]" COLUMNS(attendance_date DATE PATH "$")
-) AS jt;
-
-DROP TABLE IF EXISTS saved_dates;
-
-CREATE TABLE saved_dates AS
-SELECT 
-    user_id,
-    jt.attendance_date
-FROM accounts_attendance
-JOIN JSON_TABLE(
-    attendance_date_list, 
-    "$[*]" COLUMNS(attendance_date DATE PATH "$")
-) AS jt;
-
-DROP TABLE IF EXISTS saved_streaks;
-
-CREATE TABLE saved_streaks AS
-SELECT 
-    user_id,
-    MAX(streak_days) AS max_streak_days
-FROM (
-    SELECT 
-        user_id,
-        COUNT(*) AS streak_days
-    FROM (
-        SELECT 
-            user_id,
-            attendance_date,
-            -- 연속 날짜 계산 로직
-            DATE_SUB(attendance_date, INTERVAL ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY attendance_date) DAY) AS streak_group_id
-        FROM saved_dates
-    ) AS grouping_step
-    GROUP BY user_id, streak_group_id
-) AS summary_step
-GROUP BY user_id;
-
--- 결과 조회
+-- 가입후 연속 출석수 확인
 SELECT 
     CASE 
         WHEN max_streak_days >= 30 THEN '30일 이상 (신)'
@@ -178,32 +87,6 @@ FROM accounts_attendance
 GROUP BY date
 ORDER BY date;
 ------------------------------------------------------------------------------------------------------------------------------------------------
-# 지불기록 테이블 살펴보기
-SELECT COUNT(*) FROM accounts_paymenthistory;
-
-SELECT
-  COUNT(DISTINCT user_id) AS paying_users
-FROM accounts_paymenthistory;
-
-SELECT
-  HOUR(created_at) AS hour_of_day, -- 시간대 추출 (0~23)
-  COUNT(id) AS transaction_count
-FROM accounts_paymenthistory
-GROUP BY HOUR(created_at)
-ORDER BY hour_of_day;
-
--- MySQL 예시: 시간을 9시간 더해서 조회
-SELECT
-  HOUR(DATE_ADD(created_at, INTERVAL 9 HOUR)) AS hour_of_day_kst,
-  COUNT(id) AS transaction_count
-FROM accounts_paymenthistory
-GROUP BY hour_of_day_kst
-ORDER BY hour_of_day_kst;
-
-SELECT * FROM accounts_attendance;
-
-
----------------------------
 
 -- 차단기록테이블 EDA
 
@@ -298,7 +181,7 @@ JOIN accounts_user u ON b.block_user_id = u.id
 GROUP BY time_to_be_blocked
 ORDER BY time_to_be_blocked;
 
---------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------
 
 SELECT * FROM accounts_failpaymenthistory;
 
@@ -356,7 +239,7 @@ FROM accounts_failpaymenthistory
 GROUP BY hour_of_day
 ORDER BY hour_of_day;
 
-----------------------------------------
+--------------------------------------------------------------------------------------------
 
 SELECT * FROM accounts_friendrequest;
 
@@ -432,7 +315,7 @@ HAVING total_sent >= 10
 ORDER BY success_rate ASC, total_sent DESC
 LIMIT 30;
 
---------------------------------------------------------------
+-----------------------------------------------------------------------------------------
 
 
 SELECT 
@@ -577,13 +460,37 @@ SELECT
     MOD(COUNT(*), 2) AS is_odd_number
 FROM accounts_nearbyschool;
 
+--------------------------------------------------------------------------------------------------
+# 지불기록 테이블 살펴보기
+SELECT COUNT(*) FROM accounts_paymenthistory;
+
+SELECT
+  COUNT(DISTINCT user_id) AS paying_users
+FROM accounts_paymenthistory;
+
+SELECT
+  HOUR(created_at) AS hour_of_day, -- 시간대 추출 (0~23)
+  COUNT(id) AS transaction_count
+FROM accounts_paymenthistory
+GROUP BY HOUR(created_at)
+ORDER BY hour_of_day;
+
+-- MySQL 예시: 시간을 9시간 더해서 조회
+SELECT
+  HOUR(DATE_ADD(created_at, INTERVAL 9 HOUR)) AS hour_of_day_kst,
+  COUNT(id) AS transaction_count
+FROM accounts_paymenthistory
+GROUP BY hour_of_day_kst
+ORDER BY hour_of_day_kst;
+
+SELECT * FROM accounts_attendance;
 
 --------------------------------------------------------------------------------------------------
 
 
 SELECT * FROM accounts_user_contacts;
 
-# 1. "마당발" 등급표 (인맥 분포 분석)
+# 1. 연락처 얼마나 많이있는지
 
 SELECT 
     CASE 
@@ -752,10 +659,8 @@ FROM accounts_pointhistory
 GROUP BY date
 ORDER BY date DESC; 
 
-
-
 ------------------------------------------------------------------------------------------------------------------------------------------------
-# 학교 테이블 분석
+# 10. 학교 테이블 분석
 SELECT * FROM accounts_school;
 
 # 1. "중학교 vs 고등학교" 시장 점유율 분석
@@ -829,3 +734,107 @@ ORDER BY school_count DESC
 LIMIT 20;
 
 
+------------------------------------------------------------------------------------------------------------------------
+
+
+SELECT * FROM accounts_user_contacts;
+
+SELECT 
+    -- 1. 유저 가입 경로 구분
+    CASE 
+        WHEN JSON_LENGTH(c.invite_user_id_list) > 0 THEN '💌 Invited (초대받음)'
+        ELSE '🌱 Organic (자발적 가입)' 
+    END AS user_segment,
+    -- 2. 유저 수
+    COUNT(DISTINCT c.user_id) AS user_count,
+    -- 3. 인당 평균 포인트 활동 횟수 (얼마나 자주 앱을 켰나?)
+    ROUND(COUNT(p.id) / COUNT(DISTINCT c.user_id), 1) AS avg_activity_count,
+    -- 4. 인당 평균 누적 포인트 (얼마나 많은 가치를 창출했나?)
+    -- (COALESCE는 포인트 기록이 없는 유저를 0 처리)
+    ROUND(SUM(COALESCE(p.delta_point, 0)) / COUNT(DISTINCT c.user_id), 0) AS avg_total_points
+FROM accounts_user_contacts c
+-- [Join] 유저의 연락처 정보와 포인트 기록을 합침
+LEFT JOIN accounts_pointhistory p ON c.user_id = p.user_id
+GROUP BY user_segment;
+
+
+
+SELECT 
+    -- 초대받은 횟수 (0회, 1회, 2회...)
+    JSON_LENGTH(invite_user_id_list) AS invite_received_count,
+    -- 해당되는 유저 수
+    COUNT(*) AS user_count,
+    -- 전체 대비 비율
+    ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM accounts_user_contacts), 2) AS percentage,
+    -- 해당 그룹의 평균 활동성
+    ROUND(AVG(contacts_count), 1) AS avg_activity
+FROM accounts_user_contacts
+GROUP BY invite_received_count
+ORDER BY invite_received_count ASC;
+
+
+
+-----------------
+
+SELECT 
+    -- [초대 KPI] ----------------------------------
+    -- 1. 전체 총 초대 발생 건수 (우리 서비스 내에서 일어난 총 친구 초대 수)
+    SUM(JSON_LENGTH(invite_user_id_list)) AS kpi_total_invites,
+    -- 2. 사용자 인당 평균 초대 수 (K-Factor 근사치)
+    -- (전체 초대 수 / 전체 유저 수)
+    ROUND(SUM(JSON_LENGTH(invite_user_id_list)) / COUNT(*), 4) AS kpi_avg_invites_per_user,
+    -- [활동 KPI] ----------------------------------
+    -- 3. 인당 평균 출석 일수 (활동 기간 내)
+    (SELECT ROUND(COUNT(DISTINCT CONCAT(user_id, DATE(created_at))) / COUNT(DISTINCT user_id), 1) 
+     FROM accounts_pointhistory) AS kpi_avg_attendance_days,
+    -- 4. 인당 평균 결제(포인트 소비) 횟수
+    (SELECT ROUND(COUNT(*) / COUNT(DISTINCT user_id), 1) 
+     FROM accounts_pointhistory 
+     WHERE delta_point < 0) AS kpi_avg_payment_count,
+    -- 5. 인당 평균 포인트 활동 횟수
+    (SELECT ROUND(COUNT(*) / COUNT(DISTINCT user_id), 0) 
+     FROM accounts_pointhistory) AS kpi_avg_activity_count
+
+FROM accounts_user_contacts;
+
+
+SELECT * FROM accounts_pointhistory;
+
+SELECT * FROM accounts_userquestionrecord;
+
+SELECT 
+    -- 1. 유저 그룹 분류 (초대 여부 기준)
+    CASE 
+        WHEN JSON_LENGTH(c.invite_user_id_list) > 0 THEN '💌 Invited (초대받음)'
+        ELSE '🌱 Organic (자발적 가입)' 
+    END AS user_segment,
+    -- 2. 그룹별 유저 수
+    COUNT(c.user_id) AS total_users,
+    -- 3. 인당 평균 투표 참여 횟수 (Vote Participation)
+    -- (COALESCE는 기록이 없는 유저를 0으로 처리하여 평균의 정확도를 높임)
+    ROUND(AVG(COALESCE(q.vote_count, 0)), 1) AS avg_vote_participation,
+    -- 4. 인당 평균 포인트 활동 횟수 (Point Activity)
+    ROUND(AVG(COALESCE(p.point_activity_count, 0)), 1) AS avg_point_activity,
+    -- 5. 인당 평균 출석 일수 (Attendance Days)
+    ROUND(AVG(COALESCE(p.attendance_days, 0)), 1) AS avg_attendance_days
+FROM accounts_user_contacts c
+-- [Join 1] 투표 기록 집계 (유저별 투표 횟수 미리 계산)
+LEFT JOIN (
+    SELECT 
+        user_id, 
+        COUNT(*) AS vote_count
+    FROM accounts_userquestionrecord
+    GROUP BY user_id
+) q ON c.user_id = q.user_id
+-- [Join 2] 포인트 및 출석 기록 집계 (유저별 활동/출석 미리 계산)
+LEFT JOIN (
+    SELECT 
+        user_id,
+        -- 포인트 활동 횟수 (적립 + 사용 로그 수)
+        COUNT(*) AS point_activity_count,
+        -- 출석 일수 (날짜 중복 제거)
+        COUNT(DISTINCT DATE(created_at)) AS attendance_days
+    FROM accounts_pointhistory
+    GROUP BY user_id
+) p ON c.user_id = p.user_id
+GROUP BY user_segment;
