@@ -291,7 +291,7 @@ FROM user_properties
 GROUP BY school_id, class
 ORDER BY school_id, class;
 
-
+-- 실제 학교 정보가 없는 학생들 확인
 WITH null_users AS (
     SELECT user_id AS id
     FROM user_properties AS p
@@ -308,7 +308,7 @@ FROM hackle_events
 WHERE heart_balance >= 880000000;
 
 
-
+-- 학교 정보가 없는 유저의 투표 횟수 확인 -> 아무도 없음 -> ? 
 WITH null_users AS (
     SELECT user_id
     FROM user_properties AS p
@@ -319,7 +319,51 @@ SELECT *
 FROM accounts_userquestionrecord
 JOIN null_users USING(user_id);
 
+-- 이 유저가 비정상적으로 제일 하트가 높았던 세션_id로 추측
 SELECT *
 FROM accounts_userquestionrecord
 WHERE user_id = 833041;
 
+-- 무료 충전에서 제일 높은 하트를 갖고 있던 사람이 9990000를 가지고 있었음
+-- 이 하트보다 많은 유저의 하트 수 확인
+SELECT session_id, AVG(heart_balance) AS avg_hearts
+FROM hackle_events
+WHERE heart_balance >= 9990000
+GROUP BY session_id
+ORDER BY avg_hearts;
+
+WITH min_idx AS (
+    SELECT heart_balance, MIN(event_datetime) AS event_datetime
+    FROM hackle_events
+    WHERE session_id = 'CF5F77A4-2C29-456F-9E23-68E403D0B960'
+    GROUP BY heart_balance
+),
+max_idx AS(
+    SELECT heart_balance, MAX(event_datetime) AS event_datetime
+    FROM hackle_events
+    WHERE session_id = 'CF5F77A4-2C29-456F-9E23-68E403D0B960'
+    GROUP BY heart_balance
+)
+SELECT h.event_datetime, event_key, h.heart_balance, item_name, friend_count, votes_count
+FROM hackle_events AS h
+JOIN min_idx AS i ON (h.event_datetime = i.event_datetime AND h.heart_balance = i.heart_balance)
+JOIN max_idx AS a ON (h.event_datetime = a.event_datetime AND h.heart_balance = a.heart_balance)
+GROUP BY h.heart_balance
+ORDER BY h.event_datetime;
+
+
+SELECT event_datetime, event_key, heart_balance, item_name, friend_count, votes_count
+FROM hackle_events
+WHERE session_id = 'CF5F77A4-2C29-456F-9E23-68E403D0B960' AND event_datetime LIKE '2023-07-21 19%'
+ORDER BY event_datetime;
+
+
+SELECT event_datetime, event_key, heart_balance, item_name, friend_count, votes_count
+FROM hackle_events
+WHERE session_id = 'b653e4fe-f7a4-45ba-be46-7f01053b6c21' AND event_datetime LIKE '2023-07-21%'
+ORDER BY event_datetime;
+
+SELECT event_datetime, event_key, heart_balance, item_name, friend_count, votes_count
+FROM hackle_events
+WHERE session_id = 'NnVWxmwjHcfnMENN9y4SrTPfcG82'
+ORDER BY event_datetime;
