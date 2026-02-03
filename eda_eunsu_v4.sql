@@ -249,10 +249,11 @@ revenue_users AS (
     GROUP BY session_id
 ),
 referral_users AS (
-    SELECT COUNT(DISTINCT session_id)
+    SELECT session_id, MIN(event_datetime) AS first_referral_time
     FROM hackle_events
     JOIN revenue_users USING(session_id)
     WHERE event_key = 'click_friend_invite' OR event_key = 'click_invite_friend'
+    GROUP BY session_id
 ),
 time_stamp_df AS (
 	SELECT s.session_id, timestampdiff(SECOND, first_retention_time ,first_revenue_time) AS time_diff
@@ -260,7 +261,11 @@ time_stamp_df AS (
 	LEFT JOIN question_users AS q ON s.session_id = q.session_id
     LEFT JOIN retentuin_users AS r ON s.session_id = r.session_id
     LEFT JOIN revenue_users AS v ON s.session_id = v.session_id
-	WHERE q.session_id IS NOT NULL AND r.session_id IS NOT NULL AND v.session_id IS NOT NULL
+    LEFT JOIN referral_users AS f ON s.session_id = f.session_id
+	WHERE q.session_id IS NOT NULL AND 
+          r.session_id IS NOT NULL AND 
+          v.session_id IS NOT NULL AND 
+          f.session_id IS NOT NULL
 )
 SELECT *
 FROM time_stamp_df
