@@ -618,3 +618,4 @@ FROM (
   WHERE status IN ('A', 'R')
     AND updated_at >= created_at
 ) t;
+
