@@ -607,7 +607,7 @@ WHERE status IN ('A', 'R')
   AND updated_at IS NOT NULL
   AND updated_at >= created_at;
 
-
+# 전체 분포 요약
 SELECT
   MIN(response_sec) AS min_sec,
   MAX(response_sec) AS max_sec,
@@ -619,3 +619,235 @@ FROM (
     AND updated_at >= created_at
 ) t;
 
+# 응답 소요시간 분포
+SELECT
+  CASE
+    WHEN response_sec < 10 THEN '<10s'
+    WHEN response_sec < 60 THEN '10s~1m'
+    WHEN response_sec < 300 THEN '1~5m'
+    WHEN response_sec < 3600 THEN '5m~1h'
+    WHEN response_sec < 86400 THEN '1h~1d'
+    WHEN response_sec < 604800 THEN '1d~7d'
+    ELSE '7d+'
+  END AS time_bucket,
+  COUNT(*) AS req_cnt
+FROM (
+  SELECT TIMESTAMPDIFF(SECOND, created_at, updated_at) AS response_sec
+  FROM accounts_friendrequest
+  WHERE status IN ('A', 'R')
+    AND updated_at >= created_at
+) t
+GROUP BY time_bucket
+ORDER BY
+  MIN(response_sec);
+
+
+# 수락/거절별 응답 시간 분포
+SELECT
+  status,
+  CASE
+    WHEN response_sec < 60 THEN '<1m'
+    WHEN response_sec < 3600 THEN '1m~1h'
+    WHEN response_sec < 86400 THEN '1h~1d'
+    ELSE '1d+'
+  END AS time_bucket,
+  COUNT(*) AS cnt
+FROM (
+  SELECT
+    status,
+    TIMESTAMPDIFF(SECOND, created_at, updated_at) AS response_sec
+  FROM accounts_friendrequest
+  WHERE status IN ('A', 'R')
+    AND updated_at >= created_at
+) t
+GROUP BY status, time_bucket
+ORDER BY status, cnt DESC;
+
+
+# 너무 빠른 처리
+# 수락/거절/대기와 상관없이 3초 미만
+SELECT COUNT(*) AS fast_cnt
+FROM accounts_friendrequest
+WHERE status IN ('A', 'R') AND TIMESTAMPDIFF(SECOND, created_at, updated_at) < 3
+# 1898건
+
+# 너무 느린 처리
+# 한달 이상
+SELECT COUNT(*) AS slow_cnt
+FROM accounts_friendrequest
+WHERE status IN ('A', 'R') AND TIMESTAMPDIFF(DAY, created_at, updated_at) >= 30
+# 78055명
+
+# 너무 빠른 + 너무 느린 합치기
+SELECT send_user_id, receive_user_id, status,
+  TIMESTAMPDIFF(SECOND, created_at, updated_at) AS response_sec
+FROM accounts_friendrequest
+WHERE status IN ('A', 'R')
+  AND created_at IS NOT NULL
+  AND updated_at IS NOT NULL
+  AND updated_at >= created_at
+  AND TIMESTAMPDIFF(SECOND, created_at, updated_at) >= 3
+  AND TIMESTAMPDIFF(DAY, created_at, updated_at) < 30;
+
+
+# accounts_group
+
+SELECT COUNT(DISTINCT school_id) as school_cnt
+FROM accounts_group
+GROUP BY school_id
+HAVING school_cnt >1
+
+# 결측
+SELECT
+  COUNT(*) AS total_rows,
+  SUM(grade IS NULL) AS null_grade,
+  SUM(class_num IS NULL) AS null_class_num,
+  SUM(school_id IS NULL) AS null_school_id
+FROM accounts_group;
+
+# 학년 이상치
+SELECT grade, COUNT(*) AS cnt
+FROM accounts_group
+GROUP BY grade
+ORDER BY grade;
+
+SELECT *
+FROM accounts_group
+WHERE grade <= 0 OR grade >= 7;
+
+SELECT *
+FROM accounts_group
+WHERE school_id = '3867'
+
+SELECT *
+FROM accounts_group
+WHERE grade = 4
+
+SELECT *
+FROM accounts_group
+WHERE school_id = 4658
+
+
+# 반 이상치
+SELECT class_num, COUNT(*) AS cnt
+FROM accounts_group
+GROUP BY class_num
+ORDER BY class_num;
+
+
+# 같은 학교, 학년, 반인 학생
+SELECT school_id, grade, class_num, COUNT(*) AS cnt
+FROM accounts_group
+GROUP BY school_id, grade, class_num
+HAVING COUNT(*) > 1;
+# 2명씩밖에 겹쳐지지 않음
+
+
+# accounts_nearbyschool
+
+SELECT COUNT(school_id) as sch_cnt
+FROM accounts_nearbyschool
+GROUP BY school_id
+HAVING sch_cnt >1
+# 왜 학교 아이디가 여러개지?
+
+SELECT COUNT(nearby_school_id) as nsi_cnt
+FROM accounts_nearbyschool
+GROUP BY nearby_school_id
+HAVING nearby_school_id >1
+# 이것도 여러개
+
+SELECT *
+FROM accounts_nearbyschool
+ORDER BY school_id
+LIMIT 20
+# 하나의 학교에 근접 학교 9개씩 연결되어있는 것처럼 보임
+# 하나는 학교 본인(?)
+
+# 일단 결측치 먼저
+SELECT
+  COUNT(*) AS total_rows,
+  SUM(school_id IS NULL) AS null_school_id,
+  SUM(nearby_school_id IS NULL) AS null_nearby_school_id,
+  SUM(distance IS NULL) AS null_distance
+FROM accounts_nearbyschool;
+
+# 거리 이상치 확인
+SELECT COUNT(*) AS non_positive_distance_cnt
+FROM accounts_nearbyschool
+WHERE distance = 0
+# 거리가 음수 아니면 0인 곳이 6214곳
+# 음수는 0곳 (= 거리가 0인 곳이 6214곳)
+
+SELECT COUNT(school_id) as near_cnt
+FROM accounts_group
+GROUP BY school_id
+ORDER BY near_cnt
+# 근처 학교가 9개씩 묶여있는줄 알았는데 아닌가..?
+
+
+# 일단 거리 분포 확인
+SELECT
+  MIN(distance) AS min_distance,
+  MAX(distance) AS max_distance,
+  AVG(distance) AS avg_distance
+FROM accounts_nearbyschool
+WHERE distance IS NOT NULL;
+
+# 거리 분포 확인
+# 근데 가 0.5미터일 수는 없으니 km단위로 추청
+SELECT
+  CASE
+    WHEN distance IS NULL THEN 'NULL'
+    WHEN distance < 0 THEN '<0'
+    WHEN distance = 0 THEN '=0'
+    WHEN distance < 0.5 THEN '<0.5'
+    WHEN distance < 1 THEN '0.5-1'
+    WHEN distance < 2 THEN '1-2'
+    WHEN distance < 5 THEN '2-5'
+    WHEN distance < 10 THEN '5-10'
+    ELSE '10+'
+  END AS dist_bucket,
+  COUNT(*) AS cnt
+FROM accounts_nearbyschool
+GROUP BY dist_bucket
+ORDER BY cnt DESC;
+
+SELECT COUNT(*) AS self_pair_cnt
+FROM accounts_nearbyschool
+WHERE school_id = nearby_school_id;
+# 자기 자신이 6214일줄 알았는데 5950이 나옴
+
+# school id, nearby school id 중복 관계 확인
+SELECT school_id, nearby_school_id, COUNT(*) AS cnt
+FROM accounts_nearbyschool
+GROUP BY school_id, nearby_school_id
+HAVING COUNT(*) > 1
+ORDER BY cnt DESC
+LIMIT 50;
+# ??? 
+
+# 헷갈리는 것 알고싶은 것
+# 학교별 근처학교 개수 분포
+SELECT near_cnt, COUNT(*) AS school_cnt
+FROM (
+  SELECT school_id, COUNT(*) AS near_cnt
+  FROM accounts_nearbyschool
+  GROUP BY school_id
+) t
+GROUP BY near_cnt
+ORDER BY near_cnt;
+
+# 중복 확인 다시
+SELECT nearby_school_id, COUNT(*) AS appear_cnt
+FROM accounts_nearbyschool
+GROUP BY nearby_school_id
+HAVING COUNT(*) > 1
+ORDER BY appear_cnt DESC;
+# 이게 제대로된 결과일거 같음
+# appear cnt
+
+# 6214건과 5950건 차이에 이유가 있는건지 아니면 오류인지 확인
+SELECT school_id, nearby_school_id, distance
+FROM accounts_nearbyschool
+WHERE distance = 0 AND school_id <> nearby_school_id
