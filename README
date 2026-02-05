@@ -1,0 +1,31 @@
+- git clone으로 진행할 경우!
+1. 프로젝트 폴더 > dumps 폴더 생성
+2. dumps 폴더 내에 raw data 이동
+3. 기존 폴더에서 생성됐던 docker container가 있다면 삭제하고! 없다면 바로 4. 진행!
+4. docker-compose up -d 실행해서 새로운 컨테이너(2개) 생성!
+
+- docker container 생성 과정에서 포트 충돌날 경우!
+1. docker-composer.yml 파일
+2. MySQL db > ports > 33nn:3306 으로 수정
+
+- MySQL Docker 연결 방법
+1. connect to server 실행
+2. 세부내용 설정
+  server type : MySQL
+  Host : localhost
+  Port : 3313
+  Username : root
+  Password: final_analytics@
+  Database : final_analytics
+3. connect
+
+- branch .gitignore 업데이트
+1. git switch main (다른 branch에 있었다면) main으로 이동!
+2. git pull origin main > main branch 설정 받기
+3. git switch 브랜치이름 > gitignore 파일 덮어쓸 branch로 이동
+4. git checkout main -- .gitignore > main의 gitignore 파일 복사 
+5. git add .gitignore > 현재 branch에 복사된 파일 업로드
+6. git commit -m "Update: .gitignore from main" > 업로드 완료!
+
+참고용 git/docker 설정 과정
+https://www.notion.so/2f5022bf3d0d804e8c4ac8dc14609f9f
