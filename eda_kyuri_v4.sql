@@ -851,3 +851,296 @@ ORDER BY appear_cnt DESC;
 SELECT school_id, nearby_school_id, distance
 FROM accounts_nearbyschool
 WHERE distance = 0 AND school_id <> nearby_school_id
+# 정체를 찾았다
+# 264건은 학교 아이디랑 near 학교 아이디랑 다른데, 거리는 0
+
+# 학교별로 근처 학교 개수 분포
+SELECT near_cnt, COUNT(*) AS school_cnt
+FROM (
+  SELECT school_id, COUNT(*) AS near_cnt
+  FROM accounts_nearbyschool
+  GROUP BY school_id
+) t
+GROUP BY near_cnt
+ORDER BY near_cnt;
+# 학교 수는 5950, 주변 학교 수는 10개가 맞음
+
+# 셀프 카운트는 같은데..?
+SELECT
+  COUNT(*) AS self_cnt,
+  SUM(distance = 0) AS self_distance_zero_cnt
+FROM accounts_nearbyschool
+WHERE school_id = nearby_school_id;
+
+# 다른 학교인데 distance가 0인 이상치 개수
+SELECT
+  COUNT(*) AS zero_dist_other_school_cnt
+FROM accounts_nearbyschool
+WHERE distance = 0
+  AND school_id <> nearby_school_id
+# 264건
+# 오케이 알았음
+
+# accounts_paymenthistory
+
+SELECT *
+FROM accounts_paymenthistory
+LIMIT 5;
+
+
+# 결측치
+SELECT
+  COUNT(*) AS total_rows,
+  SUM(id IS NULL) AS null_id,
+  SUM(user_id IS NULL) AS null_user_id,
+  SUM(productId IS NULL) AS null_productId,
+  SUM(TRIM(productId) = '') AS blank_productId,
+  SUM(phone_type IS NULL) AS null_phone_type,
+  SUM(TRIM(phone_type) = '') AS blank_phone_type,
+  SUM(created_at IS NULL) AS null_created_at
+FROM accounts_paymenthistory;
+
+
+# id 중복
+SELECT id, COUNT(*) AS cnt
+FROM accounts_paymenthistory
+GROUP BY id
+HAVING COUNT(*) > 1
+ORDER BY cnt DESC
+LIMIT 50;
+
+# 여러번 결제한 사람
+SELECT user_id, productId, created_at, COUNT(*) AS cnt
+FROM accounts_paymenthistory
+GROUP BY user_id, productId, created_at
+HAVING COUNT(*) > 1
+ORDER BY cnt DESC
+LIMIT 50;
+# 472건
+
+# 유저별 결제 횟수 분포
+SELECT pay_cnt, COUNT(*) AS user_cnt
+FROM (
+  SELECT user_id, COUNT(*) AS pay_cnt
+  FROM accounts_paymenthistory
+  GROUP BY user_id
+) t
+GROUP BY pay_cnt
+ORDER BY pay_cnt;
+#최대 60번 결제한 유저가 있음
+
+# 폰 타입 분포
+SELECT phone_type, COUNT(*) AS cnt
+FROM accounts_paymenthistory
+GROUP BY phone_type
+ORDER BY cnt DESC;
+# 아이폰이 약 2배 많다는 것 말곤 특이사항 없음
+
+
+# productId 분포
+SELECT productId, COUNT(*) AS cnt
+FROM accounts_paymenthistory
+WHERE productId IS NOT NULL AND TRIM(productId) <> ''
+GROUP BY productId
+ORDER BY cnt DESC
+LIMIT 50;
+# 하트 4000개는 꽤 비쌌을 텐데도 2천명이 넘게 구매
+
+# created_at
+SELECT
+  MIN(created_at) AS min_created_at,
+  MAX(created_at) AS max_created_at
+FROM accounts_paymenthistory;
+# 23/5/13~24/5/8
+
+# 시간 이상치
+SELECT *
+FROM accounts_paymenthistory
+WHERE created_at > NOW()
+ORDER BY created_at DESC
+LIMIT 50;
+
+
+# 구매 테이블에는 있는데 구매 실패에 없는 항목
+# 하트 4000이 없었던 것 같아서
+SELECT DISTINCT p.productId
+FROM accounts_paymenthistory p
+LEFT JOIN accounts_failpaymenthistory f
+  ON p.productId = f.productId
+WHERE p.productId IS NOT NULL
+  AND f.productId IS NULL
+LIMIT 50
+# 하트 4000은 구매 실패 테이블에는 없음
+
+# 반대
+SELECT DISTINCT f.productId
+FROM accounts_failpaymenthistory f
+LEFT JOIN accounts_paymenthistory p
+  ON f.productId = p.productId
+WHERE f.productId IS NOT NULL
+  AND p.productId IS NULL
+LIMIT 50
+# 없음
+
+# 별다른 이상치는 없어보이고,
+# 결제를 많이 한 유저들을 조금 더 보기
+SELECT pay_cnt, COUNT(*) AS user_cnt
+FROM (
+  SELECT user_id, COUNT(*) AS pay_cnt
+  FROM accounts_paymenthistory
+  GROUP BY user_id
+) t
+GROUP BY pay_cnt
+ORDER BY pay_cnt;
+
+SELECT user_id, COUNT(*) AS pay_cnt
+FROM accounts_paymenthistory
+GROUP BY user_id
+HAVING pay_cnt = 60;
+
+# 60번 결제한 사람의 구매 이력
+SELECT *
+FROM accounts_paymenthistory
+WHERE user_id = 1527451
+ORDER BY created_at
+# 2023/5/28 14번 결제, 아침부터 밤까지, 이상 로그는 아닌 것으로 보임
+# 2023/5/29 22번 결제, 새벽 4시부터 결제 부지런 or 관리자?
+# 2023/6/1 부터는 4번으로, 그 뒤에도 줄어드는 추세
+
+SELECT user_id, COUNT(*) AS pay_cnt
+FROM accounts_paymenthistory
+GROUP BY user_id
+HAVING pay_cnt = 51
+
+SELECT *
+FROM accounts_paymenthistory
+WHERE user_id = 1246471
+ORDER BY created_at
+# 2023/5/23 18번
+# 2023/5/24 14번
+
+
+SELECT COUNT(DISTINCT user_id) as user_cnt
+FROM accounts_paymenthistory
+GROUP BY user_id
+HAVING user_cnt >1
+
+# accounts_pointhistory
+
+SELECT *
+FROM accounts_pointhistory
+LIMIT 10;
+
+
+SELECT
+  COUNT(*) AS total_rows,
+  SUM(CASE WHEN user_id IS NULL THEN 1 ELSE 0 END) AS null_user_id,
+  SUM(CASE WHEN delta_point IS NULL THEN 1 ELSE 0 END) AS null_delta_point,
+  SUM(CASE WHEN delta_point = 0 THEN 1 ELSE 0 END) AS zero_delta_point,
+  SUM(CASE WHEN created_at IS NULL THEN 1 ELSE 0 END) AS null_created_at,
+  SUM(CASE WHEN user_question_record_id IS NULL THEN 1 ELSE 0 END) AS null_question_id
+FROM accounts_pointhistory;
+
+SELECT COUNT(DISTINCT user_id) as user_cnt
+FROM accounts_pointhistory
+
+# 포인트 값 분포 확인
+SELECT delta_point, COUNT(*) AS cnt
+FROM accounts_pointhistory
+GROUP BY delta_point
+ORDER BY delta_point;
+
+# 유저별 포인트 총합
+SELECT user_id, SUM(delta_point) AS total_point, COUNT(*) AS event_cnt
+FROM accounts_pointhistory
+GROUP BY user_id
+ORDER BY total_point DESC
+# 최대 포인트 32378
+# 가장 적은 사람은 -18045 
+
+# 포인트가 음수인 사람
+SELECT user_id, SUM(delta_point) AS total_point, COUNT(*) AS event_cnt
+FROM accounts_pointhistory
+GROUP BY user_id
+HAVING total_point <0
+ORDER BY total_point DESC
+# 2049명이나 음수 포인트
+# 포인트 차감 시스템이 잘 운영되었나봄
+
+# 포인트 로그 분포
+SELECT event_cnt, COUNT(*) AS user_cnt
+FROM (
+  SELECT user_id, COUNT(*) AS event_cnt
+  FROM accounts_pointhistory
+  GROUP BY user_id
+) t
+GROUP BY event_cnt
+ORDER BY event_cnt;
+# 포인트 이벤트 로그가 가장 많은 유저는 2976번이나 되었음
+# 2천번을 넘는 이용자가 꽤 있음
+
+
+SELECT
+  CASE
+    WHEN user_question_record_id IS NULL THEN 'non_question'
+    ELSE 'question_based'
+  END AS type,
+  COUNT(*) AS cnt,
+  SUM(delta_point) AS total_point
+FROM accounts_pointhistory
+GROUP BY type;
+
+# 시간 분포, 이상치
+SELECT DATE(created_at) AS dt, COUNT(*) AS cnt
+FROM accounts_pointhistory
+GROUP BY dt
+ORDER BY dt;
+# 2023/04/28~2024/05/08
+# 이상치는 없는 듯
+# 23/4~6에는 로그가 굉장히 많고, 그 뒤로 8월, 9월도 많았지만
+# 그 뒤로 줄어드는 추세
+
+
+# 음수 포인트 로그 수
+SELECT COUNT(*) AS neg_rows, COUNT(DISTINCT user_id) AS neg_users
+FROM accounts_pointhistory
+WHERE delta_point < 0;
+# 음수 로그는 108583행, 유저는 4609명
+
+# 음수 로그 횟수가 많은 유저
+SELECT user_id, COUNT(*) AS neg_event_cnt, SUM(delta_point) AS neg_point_sum  
+FROM accounts_pointhistory
+WHERE delta_point < 0
+GROUP BY user_id
+ORDER BY neg_event_cnt DESC
+# 4609명, 포인트 값도 매우 다양
+
+# 포인트 차감 폭이 큰 순서대로
+SELECT user_id, COUNT(*) AS neg_event_cnt, SUM(delta_point) AS neg_point_sum
+FROM accounts_pointhistory
+WHERE delta_point < 0
+GROUP BY user_id
+ORDER BY neg_point_sum ASC
+LIMIT 50;
+
+
+# 가장 차감폭이 컸던? 유저 확인
+SELECT *
+FROM accounts_pointhistory
+WHERE user_id = 1185764
+ORDER BY created_at;
+# 300씩 차감되는게 일반적인듯
+
+# 음수만 보기
+SELECT id, user_id, user_question_record_id, delta_point, created_at
+FROM accounts_pointhistory
+WHERE user_id = 1185764     -- ← 대상 유저
+  AND delta_point < 0
+ORDER BY created_at;
+# -1000도 있고, -200, -500도 있음
+
+SELECT delta_point, COUNT(*) AS cnt, COUNT(DISTINCT user_id) AS user_cnt
+FROM accounts_pointhistory
+WHERE delta_point < 0
+GROUP BY delta_point
+ORDER BY delta_point;
