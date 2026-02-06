@@ -1,4 +1,4 @@
--- Active: 1769575924621@@localhost@3313@final_analytics
+-- Active: 1769491384549@@localhost@3306@final
 
 # account_attendance
 
@@ -1144,3 +1144,346 @@ FROM accounts_pointhistory
 WHERE delta_point < 0
 GROUP BY delta_point
 ORDER BY delta_point;
+
+
+# poll question
+
+# 결측 확인
+SELECT
+  COUNT(*) AS total_rows,
+  SUM(CASE WHEN question_text IS NULL THEN 1 ELSE 0 END) AS null_question,
+  SUM(CASE WHEN TRIM(question_text) = '' THEN 1 ELSE 0 END) AS blank_question,
+  SUM(CASE WHEN created_at IS NULL THEN 1 ELSE 0 END) AS null_created_at
+FROM polls_question
+# 없음
+
+# 아이디 중복
+SELECT COUNT(id) as id_cnt
+FROM polls_question
+GROUP BY id
+HAVING id_cnt >2
+# 1번 아이디가 5025번 중복
+# 아마 질문을 등록한 개발자 아이디일 것
+
+# 질문 중복 여부
+SELECT question_text, COUNT(*) AS cnt
+FROM polls_question
+GROUP BY question_text
+HAVING COUNT(*) > 1
+ORDER BY cnt DESC
+LIMIT 20
+# 질문이 아닌 'vote'가 있음
+# 일반 질문들은 2~3번 중복되는데, vote는 56건
+
+# 질문 생성 시점
+SELECT DATE(created_at) AS dt, COUNT(*) AS question_cnt
+FROM polls_question
+GROUP BY dt
+ORDER BY dt
+# 2023/03/31~2023/06/06
+
+# 질문 생성 시점
+# 초단위
+SELECT
+  created_at,
+  LAG(created_at) OVER (ORDER BY created_at) AS prev_created_at,
+  TIMESTAMPDIFF(SECOND,
+    LAG(created_at) OVER (ORDER BY created_at),
+    created_at
+  ) AS diff_sec
+FROM polls_question
+ORDER BY created_at
+LIMIT 200;
+
+# 질문 생성 시각 이상치
+SELECT *
+FROM polls_question
+WHERE created_at > NOW()
+ORDER BY created_at DESC
+LIMIT 50
+
+SELECT MIN(created_at) AS min_created_at, MAX(created_at) AS max_created_at
+FROM polls_question
+# 위에서 확인한 것과 시점 같음
+
+
+# 질문 길이
+SELECT id, question_text, created_at
+FROM polls_question
+WHERE question_text IS NOT NULL AND LENGTH(TRIM(question_text)) < 10
+ORDER BY created_at DESC
+LIMIT 50;
+# 질문 내용에 '좋아해', '포인트', '실물파', '토끼상'이 있음
+# 질문도 학생들이 만들 수 있는 것으로 보임
+
+# 학생들이 질문을 만들 수 있다면 오타도 있을까
+# 공백 두번
+SELECT id, question_text
+FROM polls_question
+WHERE question_text REGEXP '  +'
+LIMIT 50
+# '퀸동주가 롤모델일 것  같은 사람은?' 이 질문으로 봤을 때, 학생들끼리 소속감도 소외감도 느낄 수 있었을 듯
+# '퀸동주가 롤모델일 것  같은 사람은?', '혓바닥이 가장 분홍색일 것  같은 사람은?' 이 질문은 두개 씩 있음
+
+
+# 너무 긴 질문
+SELECT id, LENGTH(question_text) AS len, question_text, created_at
+FROM polls_question
+WHERE question_text IS NOT NULL AND LENGTH(question_text) >= 180
+ORDER BY len DESC
+LIMIT 50;
+# 없음
+
+# 질문 생성 시간대
+SELECT
+  HOUR(created_at) AS hour,
+  COUNT(*) AS cnt
+FROM polls_question
+WHERE created_at IS NOT NULL
+GROUP BY hour
+ORDER BY hour;
+# 보통 아침 8시
+
+
+
+# polls_questionpiece
+
+SELECT *
+FROM polls_questionpiece
+LIMIT 5
+
+SELECT id, COUNT(*) AS cnt
+FROM polls_questionpiece
+GROUP BY id
+HAVING cnt > 2
+# 아이디 중복 1265476
+
+SELECT question_id, COUNT(*) AS piece_cnt
+FROM polls_questionpiece
+GROUP BY question_id
+# question id 중복 확인
+# 중복 많음
+
+# 결측
+SELECT
+  COUNT(*) AS total_rows,
+  SUM(CASE WHEN question_id IS NULL THEN 1 ELSE 0 END) AS null_question_id,
+  SUM(CASE WHEN is_voted IS NULL THEN 1 ELSE 0 END) AS null_is_voted,
+  SUM(CASE WHEN is_skipped IS NULL THEN 1 ELSE 0 END) AS null_is_skipped,
+  SUM(CASE WHEN created_at IS NULL THEN 1 ELSE 0 END) AS null_created_at
+FROM polls_questionpiece
+# 없음
+
+# 이상치
+SELECT
+  SUM(CASE WHEN is_voted NOT IN (0,1) THEN 1 ELSE 0 END) AS invalid_is_voted,
+  SUM(CASE WHEN is_skipped NOT IN (0,1) THEN 1 ELSE 0 END) AS invalid_is_skipped
+FROM polls_questionpiece
+# 없음
+
+# 투표를 하면서 스킵한 사람(있을 수 없음)
+SELECT *
+FROM polls_questionpiece
+WHERE is_voted = 1 AND is_skipped = 1
+# ? 1127건
+# 둘다 1일 수 있는건가?
+
+# question id 기준으로 확인
+SELECT
+  question_id,
+  SUM(is_voted = 1) AS voted_piece_cnt,
+  SUM(is_skipped = 1) AS skipped_piece_cnt,
+  COUNT(*) AS piece_cnt
+FROM polls_questionpiece
+GROUP BY question_id
+HAVING voted_piece_cnt > 0 AND skipped_piece_cnt > 0
+ORDER BY piece_cnt DESC
+# question id 기준으로 투표와 스킵 모두 보려고 했는데 원하는 결과는 아닌 것 같음,,
+
+
+# 조각 1개인 질문
+SELECT question_id
+FROM polls_questionpiece
+GROUP BY question_id
+HAVING COUNT(*) = 1;
+
+
+# 투표도 스킵도 안한 경우
+# 이건 아직 행동을 안한거라서 그럴 순 있을 듯
+SELECT COUNT(*) AS neither_cnt
+FROM polls_questionpiece
+WHERE is_voted = 0 AND is_skipped = 0
+# 46789건
+
+# question id 중복 로그
+SELECT question_id, COUNT(*) AS piece_cnt
+FROM polls_questionpiece
+GROUP BY question_id
+HAVING COUNT(*) > 1
+ORDER BY piece_cnt DESC
+LIMIT 50
+# 같은 질문 조각에 로그가 여러번 찍혔는지
+# 중복은 굉장히 많음
+# 나중에 다른 question 테이블(user_question_record?)와 조인해도 좋을듯
+
+# 질문과 질문 조각 차이가 뭔지 아직 잘 감이 안옴
+SELECT piece_cnt, COUNT(*) AS question_cnt
+FROM (
+  SELECT
+    question_id,
+    COUNT(*) AS piece_cnt
+  FROM polls_questionpiece
+  GROUP BY question_id
+) t
+GROUP BY piece_cnt
+ORDER BY piece_cnt
+# 피스 1개인 질문 202개, 2개인 질문 235개, 3개인 질문 191개, ..., 2030개인 질문 1개
+# 질문 조각이 뭘까?
+
+# 시간 이상치
+SELECT *
+FROM polls_questionpiece
+WHERE created_at > NOW()
+ORDER BY created_at DESC
+LIMIT 50
+
+# polls questionreport
+
+SELECT *
+FROM polls_questionreport
+LIMIT 5
+
+SELECT
+  COUNT(*) AS total_rows,
+  SUM(CASE WHEN id IS NULL THEN 1 ELSE 0 END) AS null_id,
+  SUM(CASE WHEN user_id IS NULL THEN 1 ELSE 0 END) AS null_user_id,
+  SUM(CASE WHEN question_id IS NULL THEN 1 ELSE 0 END) AS null_question_id,
+  SUM(CASE WHEN created_at IS NULL THEN 1 ELSE 0 END) AS null_created_at,
+  SUM(CASE WHEN reason IS NULL THEN 1 ELSE 0 END) AS null_reason,
+  SUM(CASE WHEN reason = '' THEN 1 ELSE 0 END) AS empty_reason,
+  SUM(CASE WHEN TRIM(reason) = '' THEN 1 ELSE 0 END) AS blank_reason
+FROM polls_questionreport;
+
+SELECT COUNT(id) as id_cnt
+FROM polls_questionreport
+GROUP BY id
+HAVING id_cnt>1
+
+SELECT user_id, COUNT(*) AS cnt
+FROM polls_questionreport
+GROUP BY user_id
+HAVING COUNT(*) > 1
+ORDER BY cnt DESC
+# id는 PK, user_id는 중복신고했을 수 있으니까 여러번?
+
+# 같은 유저가 같은 질문을 여러 번 신고했는지
+SELECT
+  user_id,
+  question_id,
+  COUNT(*) AS report_cnt,
+  MIN(created_at) AS first_report_at,
+  MAX(created_at) AS last_report_at
+FROM polls_questionreport
+WHERE user_id IS NOT NULL AND question_id IS NOT NULL
+GROUP BY user_id, question_id
+HAVING COUNT(*) > 1
+ORDER BY report_cnt DESC
+LIMIT 50
+# 4949건, 똑같은 질문에 가장 많이 신고한 사람은 17번 신고
+
+SELECT
+  user_id,
+  COUNT(*) AS report_cnt,
+  MIN(created_at) AS first_report_at,
+  MAX(created_at) AS last_report_at
+FROM polls_questionreport
+WHERE user_id IS NOT NULL
+GROUP BY user_id
+HAVING COUNT(*) > 1
+ORDER BY report_cnt DESC
+LIMIT 50
+# 질문에 상관없이 신고 수만 봤을 때는, 가장 많이 신고한 사람이 865번 신고함
+
+
+SELECT *
+FROM polls_questionreport
+WHERE user_id = 1309630
+# 질문을 가장 많이 신고한 사람의 신고 사유는 모두 그냥 싫어
+
+SELECT *
+FROM polls_questionreport
+WHERE user_id = 1441146 AND reason = '그냥 싫어'
+# 최다 신고자 신고 사유도 모두 그냥 싫어
+
+# 1분 이내에 2번 이상 신고 
+# 중복 신고
+WITH pair_reports AS (
+  SELECT
+    user_id,
+    question_id,
+    created_at,
+    LAG(created_at) OVER (PARTITION BY user_id, question_id ORDER BY created_at) AS prev_created_at
+  FROM polls_questionreport
+)
+SELECT
+  user_id,
+  question_id,
+  COUNT(*) AS fast_dup_cnt
+FROM pair_reports
+WHERE prev_created_at IS NOT NULL
+  AND TIMESTAMPDIFF(SECOND, prev_created_at, created_at) <= 10
+GROUP BY user_id, question_id
+ORDER BY fast_dup_cnt DESC
+# 10초로 줄여서 봤고, 1086명의 유저가 중복 신고
+# 신고 횟수는 최대가 8번
+
+# 시간 이상치
+SELECT MIN(created_at) AS min_created_at, MAX(created_at) AS max_created_at
+FROM polls_questionreport
+# 시간 범위는 23/4/19~24/5/5
+
+SELECT *
+FROM polls_questionreport
+WHERE created_at > NOW()
+ORDER BY created_at DESC
+
+# 날짜별 신고량
+SELECT
+  DATE(created_at) AS dt,
+  COUNT(*) AS report_cnt,
+  COUNT(DISTINCT user_id) AS reporter_cnt,
+  COUNT(DISTINCT question_id) AS reported_question_cnt
+FROM polls_questionreport
+WHERE created_at IS NOT NULL
+GROUP BY dt
+ORDER BY dt
+# 23/4/19~24/5/5까지 기록
+# report cnt: 신고 로그 수
+# reporter cnt: 그 날 신고에 참여한 서로 다른 유저 수
+# reported question cnt: 그날 신고된 서로 다른 질문 수
+
+# 신고한 유저 목록 + 신고 횟수
+SELECT DATE(created_at) AS dt, user_id, COUNT(*) AS report_cnt
+FROM polls_questionreport
+WHERE user_id IS NOT NULL
+GROUP BY dt, user_id
+ORDER BY report_cnt DESC, user_id
+
+# 가장 신고가 많이 들어온 날짜 순
+SELECT DATE(created_at) AS dt, COUNT(*) AS report_cnt
+FROM polls_questionreport
+WHERE user_id IS NOT NULL
+GROUP BY dt, user_id
+ORDER BY report_cnt DESC
+# 가장 많이 신고가 있었던 횟수는 343건
+
+# 그냥 전체 기간 동안 신고를 많이 한 유저
+SELECT
+  user_id,
+  COUNT(*) AS total_report_cnt,
+  COUNT(DISTINCT question_id) AS distinct_question_cnt
+FROM polls_questionreport
+GROUP BY user_id
+ORDER BY total_report_cnt DESC
+# 1441146유저 총 865번, 774개 질문에 신고
+# 이후 200번대로 줄어듦
