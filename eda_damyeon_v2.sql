@@ -55,6 +55,29 @@ HAVING device_count > 1
 ORDER BY device_count DESC
 ;
 
+---
+
+-- 결측치 확인
+SELECT
+    COUNT(*) AS total_rows,
+    SUM(CASE WHEN session_id IS NULL THEN 1 ELSE 0 END) AS session_id_count,
+    SUM(CASE WHEN user_id IS NULL THEN 1 ELSE 0 END) AS user_id_count,
+    SUM(CASE WHEN language IS NULL THEN 1 ELSE 0 END) AS language_count,
+    SUM(CASE WHEN osname IS NULL THEN 1 ELSE 0 END) AS osname_count,
+    SUM(CASE WHEN osversion IS NULL THEN 1 ELSE 0 END) AS osversion_count,
+    SUM(CASE WHEN versionname IS NULL THEN 1 ELSE 0 END) AS versionname_count,
+    SUM(CASE WHEN device_id IS NULL THEN 1 ELSE 0 END) AS device_id_count
+FROM hackle_properties
+;
+
+-- 중복값 확인
+SELECT
+    COUNT(*) AS total_count,
+    COUNT(DISTINCT(session_id))
+FROM hackle_properties
+;
+
+
 ------------------------
 
 -- II. device_properties
