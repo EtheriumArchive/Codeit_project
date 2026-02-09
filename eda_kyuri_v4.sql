@@ -1431,8 +1431,9 @@ SELECT
   COUNT(*) AS fast_dup_cnt
 FROM pair_reports
 WHERE prev_created_at IS NOT NULL
-  AND TIMESTAMPDIFF(SECOND, prev_created_at, created_at) <= 10
+  AND TIMESTAMPDIFF(SECOND, prev_created_at, created_at) <= 3
 GROUP BY user_id, question_id
+HAVING fast_dup_cnt >=2
 ORDER BY fast_dup_cnt DESC
 # 10초로 줄여서 봤고, 1086명의 유저가 중복 신고
 # 신고 횟수는 최대가 8번
@@ -1487,3 +1488,288 @@ GROUP BY user_id
 ORDER BY total_report_cnt DESC
 # 1441146유저 총 865번, 774개 질문에 신고
 # 이후 200번대로 줄어듦
+
+
+# polls_questionset
+
+SELECT *
+FROM polls_questionset
+LIMIT 5
+
+
+SELECT
+  COUNT(*) AS total_rows,
+  SUM(id IS NULL) AS null_id,
+  SUM(user_id IS NULL) AS null_user_id,
+  SUM(status IS NULL) AS null_status,
+  SUM(TRIM(status) = '') AS blank_status,
+  SUM(opening_time IS NULL) AS null_opening_time,
+  SUM(created_at IS NULL) AS null_created_at,
+  SUM(question_piece_id_list IS NULL) AS null_piece_list,
+  SUM(TRIM(question_piece_id_list) = '') AS blank_piece_list,
+  SUM(TRIM(question_piece_id_list) = '[]') AS empty_json_list
+FROM polls_questionset
+# 결측 없음
+
+# id 중복
+SELECT id, COUNT(*) AS cnt
+FROM polls_questionset
+GROUP BY id
+HAVING COUNT(*) > 1
+ORDER BY cnt DESC
+LIMIT 50
+
+# user id 중복 확인
+SELECT user_id, opening_time, COUNT(*) AS cnt
+FROM polls_questionset
+WHERE user_id IS NOT NULL AND opening_time IS NOT NULL
+GROUP BY user_id, opening_time
+HAVING COUNT(*) > 1
+ORDER BY cnt DESC
+# 중복이 2개씩??
+
+# status 값 확인
+SELECT status, COUNT(*) AS cnt
+FROM polls_questionset
+GROUP BY status
+ORDER BY cnt DESC
+# F 종료: 153411
+# O 열림: 4407
+# C 닫힘: 566
+
+# 시간 확인
+SELECT
+  MIN(created_at) AS min_created_at,
+  MAX(created_at) AS max_created_at,
+  MIN(opening_time) AS min_opening_time,
+  MAX(opening_time) AS max_opening_time
+FROM polls_questionset
+# created at, opening time: 23/4/28~24/5/7
+
+# 당연히 생성이 오픈보다 먼저여야 함
+SELECT *
+FROM polls_questionset
+WHERE created_at IS NOT NULL
+  AND opening_time IS NOT NULL
+  AND opening_time < created_at
+ORDER BY (TIMESTAMPDIFF(SECOND, opening_time, created_at)) DESC
+# create가 open보다 더 늦은 질문세트 679건
+
+# 미래시간
+SELECT *
+FROM polls_questionset
+WHERE opening_time > NOW() OR created_at > NOW()
+ORDER BY GREATEST(opening_time, created_at) DESC
+# 없음
+
+# piece list sample은 어떻게 생겼는지
+SELECT id, user_id, status, opening_time, created_at, LEFT(question_piece_id_list, 200) AS piece_list_sample
+FROM polls_questionset
+WHERE question_piece_id_list IS NOT NULL
+ORDER BY id
+
+# accounts attendance처럼 리스트 길이 확인
+SELECT
+  CASE
+    WHEN question_piece_id_list IS NULL OR TRIM(question_piece_id_list) = '' THEN 'NULL/BLANK'
+    WHEN TRIM(question_piece_id_list) = '[]' THEN 'EMPTY_LIST'
+    WHEN LENGTH(question_piece_id_list) < 10 THEN '<10'
+    WHEN LENGTH(question_piece_id_list) < 50 THEN '10-49'
+    WHEN LENGTH(question_piece_id_list) < 200 THEN '50-199'
+    WHEN LENGTH(question_piece_id_list) < 1000 THEN '200-999'
+    ELSE '1000+'
+  END AS len_bucket,
+  COUNT(*) AS cnt
+FROM polls_questionset
+GROUP BY len_bucket
+ORDER BY cnt DESC
+# 50~199 158384건
+
+
+
+# create가 open보다 나중인것, 얼마나 차이 나는지
+SELECT
+  CASE
+    WHEN diff_sec < 1 THEN '<1s'
+    WHEN diff_sec < 3 THEN '1-2s'
+    WHEN diff_sec < 10 THEN '3-9s'
+    WHEN diff_sec < 60 THEN '10-59s'
+    WHEN diff_sec < 300 THEN '1-4m'
+    WHEN diff_sec < 3600 THEN '5-59m'
+    WHEN diff_sec < 86400 THEN '1-23h'
+    ELSE '1d+'
+  END AS diff_bucket,
+  COUNT(*) AS cnt
+FROM (
+  SELECT
+    TIMESTAMPDIFF(SECOND, opening_time, created_at) AS diff_sec
+  FROM polls_questionset
+  WHERE created_at IS NOT NULL
+    AND opening_time IS NOT NULL
+    AND opening_time < created_at
+) t
+GROUP BY diff_bucket
+ORDER BY cnt DESC
+# 1~2초 644건, 3~9초 25건, 10~59초 10건
+# 모두 1분 내에 찍히긴 했음
+
+# create > open을 status별로 확인
+SELECT
+  status,
+  COUNT(*) AS total_cnt,
+  SUM(CASE WHEN opening_time IS NOT NULL AND created_at IS NOT NULL AND opening_time < created_at THEN 1 ELSE 0 END) AS open_lt_create_cnt
+FROM polls_questionset
+GROUP BY status
+ORDER BY open_lt_create_cnt DESC
+# close 상태에서는 아예 없고, open은 8건 finish는 671건
+# 모수가 많아서 그런건지, 로직때문인지
+
+# 질문 조각 리스트 개수
+SELECT piece_cnt, COUNT(*) AS questionset_cnt
+FROM (
+  SELECT
+    CASE
+      WHEN question_piece_id_list IS NULL THEN NULL
+      WHEN TRIM(question_piece_id_list) = '' THEN NULL
+      WHEN TRIM(question_piece_id_list) = '[]' THEN 0
+      WHEN JSON_VALID(question_piece_id_list) = 1 THEN JSON_LENGTH(question_piece_id_list)
+      ELSE NULL
+    END AS piece_cnt
+  FROM polls_questionset
+) t
+GROUP BY piece_cnt
+ORDER BY piece_cnt
+# 모두 10개?? 위 결과랑은 다름
+
+# 질문 조각 개수 10개 맞는지 상태별로 다시 확인
+SELECT
+  status,
+  JSON_LENGTH(question_piece_id_list) AS piece_cnt,
+  COUNT(*) AS cnt
+FROM polls_questionset
+WHERE question_piece_id_list IS NOT NULL
+  AND JSON_VALID(question_piece_id_list) = 1
+  AND JSON_LENGTH(question_piece_id_list) IN (0, 10)
+GROUP BY status, piece_cnt
+ORDER BY piece_cnt, cnt DESC
+# 맞긴 함
+
+# 질문 세트가 열린 수 + 생성 유저 수
+# open time 기준
+SELECT
+  DATE(opening_time) AS dt,
+  COUNT(*) AS opened_set_cnt,
+  COUNT(DISTINCT user_id) AS creator_user_cnt
+FROM polls_questionset
+WHERE opening_time IS NOT NULL
+GROUP BY dt
+ORDER BY dt;
+# 23/4/28-23/8/5
+# 점점 활성화된 질문이 많아지다가 줄어듦
+
+# polls_usercandidate
+
+# 결측
+SELECT
+  COUNT(*) AS total_rows,
+  SUM(CASE WHEN user_id IS NULL THEN 1 ELSE 0 END) AS null_user,
+  SUM(CASE WHEN question_piece_id IS NULL THEN 1 ELSE 0 END) AS null_piece,
+  SUM(CASE WHEN created_at IS NULL THEN 1 ELSE 0 END) AS null_created
+FROM polls_usercandidate;
+
+
+# 같은 유저한테 같은 질문 조각이 여러번 노출됐는지
+SELECT user_id, question_piece_id, COUNT(*) AS exposure_cnt
+FROM polls_usercandidate
+GROUP BY user_id, question_piece_id
+HAVING COUNT(*) > 1
+ORDER BY exposure_cnt DESC
+# 최대 4번
+# 대부분 2번 = 새로고침 혹은 중복로그일 듯
+
+WITH dup AS (
+  SELECT user_id, question_piece_id, created_at,
+    LAG(created_at) OVER (PARTITION BY user_id, question_piece_id ORDER BY created_at) AS prev_created_at
+  FROM polls_usercandidate
+)
+SELECT
+  TIMESTAMPDIFF(SECOND, prev_created_at, created_at) AS diff_sec,
+  COUNT(*) AS cnt
+FROM dup
+WHERE prev_created_at IS NOT NULL
+GROUP BY diff_sec
+ORDER BY diff_sec;
+# 시간 차이 0~2초 정도면 중복이라고 생각했는데, 0초가 487건
+# 최대가 877초인 경우, 4건
+# 몇 초 사이에 중복이 되든, 4건 혹은 8건인 경우가 너무 많다
+
+
+# 유저 기준 하루 노출 이상치
+SELECT
+  DATE(created_at) AS dt,
+  user_id,
+  COUNT(*) AS exposure_cnt
+FROM polls_usercandidate
+GROUP BY dt, user_id
+HAVING COUNT(*) > 50
+ORDER BY exposure_cnt DESC
+# 한 유저가 하루에 질문 조각이 가장 많이 노출된 수 1113
+# 860304 23/5/6
+
+SELECT DATE(created_at) AS dt, COUNT(*) AS exposure_cnt
+FROM polls_usercandidate
+WHERE user_id = 860304
+GROUP BY dt
+ORDER BY dt;
+
+
+# 전체 투표율
+SELECT
+  COUNT(*) AS exposure_cnt,
+  SUM(CASE WHEN qp.is_voted = 1 THEN 1 ELSE 0 END) AS voted_cnt,
+  ROUND(
+    SUM(CASE WHEN qp.is_voted = 1 THEN 1 ELSE 0 END) / COUNT(*),
+    4
+  ) AS vote_rate
+FROM polls_usercandidate uc
+JOIN polls_questionpiece qp
+  ON uc.question_piece_id = qp.id;
+# 노출되면 무조건 투표를 한다?
+# 조인을 잘못한거 같음
+
+SELECT is_voted, COUNT(*) AS cnt
+FROM polls_questionpiece
+GROUP BY is_voted
+
+# 노출 수는 투표한 사람들한테서만 집계되는건가??
+SELECT qp.is_voted, COUNT(*) AS exposure_cnt
+FROM polls_usercandidate uc
+JOIN polls_questionpiece qp ON uc.question_piece_id = qp.id
+GROUP BY qp.is_voted;
+
+
+# 유저 1인당 평균 노출 수
+SELECT
+  AVG(exposure_cnt) AS avg_exposure_per_user
+FROM (
+  SELECT user_id, COUNT(*) AS exposure_cnt
+  FROM polls_usercandidate
+  GROUP BY user_id
+) t;
+# 238.552개
+
+# created at
+SELECT
+  MIN(created_at) AS min_created_at,
+  MAX(created_at) AS max_created_at
+FROM polls_usercandidate
+WHERE created_at IS NOT NULL
+# 23/4/28 - 24/5/8
+
+
+# 미래
+SELECT *
+FROM polls_usercandidate
+WHERE created_at > NOW()
+ORDER BY created_at
+
