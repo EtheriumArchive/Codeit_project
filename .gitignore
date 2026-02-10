@@ -13,6 +13,7 @@ __pycache__/
 *$py.class
 venv/
 .env
+.venv/
 
 # 4. OS 및 IDE 설정 파일
 .DS_Store
