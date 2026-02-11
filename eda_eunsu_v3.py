@@ -862,7 +862,7 @@ school_total_info[school_total_info['id']==122]
 
 # staff인 유저 3명 -> 제거하면 될 듯
 # staff 중 유일하게 친구를 만든 유저가 있네? (id: 831956)
- 것으로 보아 정말 staff가 맞음 (또는 테스트 계정)
+# index가 0인 것으로 보아 정말 staff가 맞음 (또는 테스트 계정)
 accounts_user[accounts_user['is_staff'] > 0]
 
 
